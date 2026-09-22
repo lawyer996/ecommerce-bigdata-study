@@ -19,3 +19,6 @@ __pycache__/
 # IDE
 .idea/
 .vscode/
+
+# 派生数据（由 clean_real_data.py 生成，可复现）
+dataset/clean_behavior.csv
