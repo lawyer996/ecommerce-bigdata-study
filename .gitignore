@@ -1,0 +1,21 @@
+# WorkBuddy 本地工作数据（不属于项目内容）
+.workbuddy/
+
+# 临时/调试文件
+*.log
+*.tmp
+
+# pip 引导脚本（环境已就绪，无需入库）
+get-pip.py
+
+# 根目录重复的数据文件（正本在 dataset/）
+/sample_behavior.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.idea/
+.vscode/
