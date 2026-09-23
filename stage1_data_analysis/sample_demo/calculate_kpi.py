@@ -1,12 +1,18 @@
 """
-calculate_kpi.py — 电商核心 KPI 指标计算
-输入：../dataset/sample_behavior.csv
-输出：PV / UV / 收藏 / 加购 / 购买次数、转化率、人均行为数、用户行为汇总
+calculate_kpi.py — 入门演示：电商核心 KPI 指标计算（小样本版）
+
+输入：dataset/sample_behavior.csv
+输出：PV / UV / 收藏 / 加购 / 购买次数、三级转化率、人均指标、用户行为汇总、购买明细
+说明：真实数据版 KPI 见上一级 real_data_kpi.py（口径相同，行为类型换成 pv/fav/cart/buy）
+
+运行：py -3.10 stage1_data_analysis/sample_demo/calculate_kpi.py
 """
+from pathlib import Path
+
 import pandas as pd
 
-# 相对路径读取（在 stage1_data_analysis 目录下运行）
-df = pd.read_csv("../dataset/sample_behavior.csv")
+BASE = Path(__file__).resolve().parents[2]
+df = pd.read_csv(BASE / "dataset" / "sample_behavior.csv")
 
 # 行为类型映射：1浏览 2收藏 3加购 4购买
 behavior_map = {1: "浏览", 2: "收藏", 3: "加购", 4: "购买"}
@@ -22,8 +28,7 @@ buy_cnt = len(df[df["behavior_type"] == 4])  # 购买次数
 # ========== 转化率 ==========
 cart_rate = cart_cnt / pv if pv else 0       # 浏览 → 加购
 buy_rate = buy_cnt / pv if pv else 0         # 浏览 → 购买
-# 加购 → 购买（购物意向转化），注意分母是加购数而不是浏览数
-cart2buy_rate = buy_cnt / cart_cnt if cart_cnt else 0
+cart2buy_rate = buy_cnt / cart_cnt if cart_cnt else 0   # 加购 → 购买（分母是加购数）
 
 # ========== 人均指标 ==========
 behavior_per_user = len(df) / uv if uv else 0    # 人均行为次数
@@ -50,5 +55,12 @@ order = [c for c in ["浏览", "收藏", "加购", "购买"] if c in user_behavi
 print(user_behavior[order])
 
 print("\n========== 购买用户明细 ==========")
-buy_users = df[df["behavior_type"] == 4][["user_id", "item_id", "category_id", "datetime" if "datetime" in df.columns else "timestamp"]]
+buy_users = df[df["behavior_type"] == 4][["user_id", "item_id", "category_id", "datetime"]]
 print(buy_users.to_string(index=False))
+
+print("""
+========== 一个数据提醒 ==========
+样本里 10 条记录、5 次浏览对应 3 次购买，加购 → 购买转化率会超过 100%：
+因为手造数据里购买行为没有前置加购记录。真实数据集（见 real_data_kpi.py）
+购买率只有 2.57%，这个指标才有漏斗意义。
+""")

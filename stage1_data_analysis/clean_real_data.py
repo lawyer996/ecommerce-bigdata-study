@@ -1,19 +1,32 @@
 """
 clean_real_data.py — 阶段1·周1：真实数据集清洗（天池 UserBehavior）
 
-数据源：UserBehavior.csv（阿里云天池公开数据集子集，见 dataset/数据集说明.md）
+数据源：dataset/UserBehavior.csv（阿里云天池公开数据集子集，见 dataset/数据集说明.md）
 字段：user_id, item_id, category_id, behavior_type(pv/buy/cart/fav), timestamp
 清洗动作（对应方案步骤3）：
     1. 字段类型校验 + 缺失值处理
     2. 行为类型过滤：只保留 pv/fav/cart/buy 四种合法枚举
     3. 时间范围过滤：只保留 2017-11-25 ~ 2017-12-03（数据集官方声明区间）
     4. 全字段去重
-输出：dataset/clean_behavior.csv（清洗后标准数据集）
+输出：dataset/clean_behavior.csv（清洗后标准数据集，后续所有阶段统一以它为输入）
+
+运行方式（任意目录下都可以执行）：
+    py -3.10 stage1_data_analysis/clean_real_data.py
 """
+from pathlib import Path
+
 import pandas as pd
 
-RAW = "../dataset/UserBehavior.csv"
-OUT = "../dataset/clean_behavior.csv"
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent                      # 项目根目录
+RAW = ROOT / "dataset" / "UserBehavior.csv"
+OUT = ROOT / "dataset" / "clean_behavior.csv"
+
+if not RAW.exists():
+    raise SystemExit(
+        f"找不到原始数据：{RAW}\n"
+        f"请先下载数据集：py -3.10 dataset/download_userbehavior.py"
+    )
 
 # ---------- 1. 读取原始数据（无表头，5列） ----------
 df = pd.read_csv(RAW, header=None,

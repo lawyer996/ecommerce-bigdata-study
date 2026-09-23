@@ -1,24 +1,20 @@
-# WorkBuddy 本地工作数据（不属于项目内容）
+# ---------- local work data (not part of the project) ----------
 .workbuddy/
 
-# 临时/调试文件
+# ---------- temp / debug files ----------
 *.log
 *.tmp
+_probe*
+_inv*
 
-# pip 引导脚本（环境已就绪，无需入库）
-get-pip.py
-
-# 根目录重复的数据文件（正本在 dataset/）
-/sample_behavior.csv
-
-# Python
+# ---------- python ----------
 __pycache__/
 *.pyc
 .venv/
 
-# IDE
+# ---------- IDE ----------
 .idea/
 .vscode/
 
-# �������ݣ��� clean_real_data.py ���ɣ��ɸ��֣�
+# ---------- derived data (regenerable, see README quick start) ----------
 dataset/clean_behavior.csv

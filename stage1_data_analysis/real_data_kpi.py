@@ -1,7 +1,14 @@
 """
 real_data_kpi.py — 阶段1：真实数据集核心 KPI + 可视化
-数据：../dataset/clean_behavior.csv（clean_real_data.py 的输出）
+
+数据：dataset/clean_behavior.csv（clean_real_data.py 的输出）
+输出：stage1_data_analysis/real_behavior_analysis.png
+
+运行方式（任意目录下都可以执行）：
+    py -3.10 stage1_data_analysis/real_data_kpi.py
 """
+from pathlib import Path
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -10,9 +17,16 @@ import pandas as pd
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei"]
 plt.rcParams["axes.unicode_minus"] = False
 
-df = pd.read_csv("../dataset/clean_behavior.csv", parse_dates=["datetime"])
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+SRC = ROOT / "dataset" / "clean_behavior.csv"
 
-# ---------- 核心 KPI（与 calculate_kpi.py 同口径，行为类型改为字符串枚举） ----------
+if not SRC.exists():
+    raise SystemExit(f"找不到 {SRC}\n请先运行：py -3.10 stage1_data_analysis/clean_real_data.py")
+
+df = pd.read_csv(SRC, parse_dates=["datetime"])
+
+# ---------- 核心 KPI（与 calculate_kpi.py 同口径，行为类型为字符串枚举） ----------
 cnt = df["behavior_type"].value_counts()
 pv, fav, cart, buy = cnt.get("pv", 0), cnt.get("fav", 0), cnt.get("cart", 0), cnt.get("buy", 0)
 uv = df["user_id"].nunique()
@@ -51,8 +65,9 @@ ax.set_title(f"真实行为漏斗（购买率 {buy/pv:.2%}）")
 ax.set_xlabel("次数")
 
 plt.tight_layout()
-plt.savefig("real_behavior_analysis.png", dpi=150)
-print("\n图表已保存：real_behavior_analysis.png")
+out_png = HERE / "real_behavior_analysis.png"
+plt.savefig(out_png, dpi=150)
+print(f"\n图表已保存：{out_png}")
 
 print("""
 ========== 分析解读 ==========

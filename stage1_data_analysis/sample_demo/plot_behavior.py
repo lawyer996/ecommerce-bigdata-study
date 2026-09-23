@@ -1,14 +1,25 @@
-"""电商用户行为可视化：行为分布柱状图 + 转化漏斗 + 用户行为堆积图"""
+"""
+plot_behavior.py — 入门演示：电商用户行为可视化（小样本版）
+
+三张图：行为类型分布 / 转化漏斗 / 各用户行为构成
+输出：stage1_data_analysis/sample_demo/behavior_analysis.png
+
+运行：py -3.10 stage1_data_analysis/sample_demo/plot_behavior.py
+"""
+from pathlib import Path
+
 import matplotlib
-matplotlib.use("Agg")  # 无界面环境直接出图
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-# 中文显示配置（Windows 自带微软雅黑）
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei"]
 plt.rcParams["axes.unicode_minus"] = False
 
-df = pd.read_csv("../dataset/sample_behavior.csv")
+HERE = Path(__file__).resolve().parent
+BASE = HERE.parents[1]
+
+df = pd.read_csv(BASE / "dataset" / "sample_behavior.csv")
 behavior_map = {1: "浏览", 2: "收藏", 3: "加购", 4: "购买"}
 df["behavior_name"] = df["behavior_type"].map(behavior_map)
 
@@ -20,13 +31,12 @@ fig, axes = plt.subplots(1, 3, figsize=(16, 4.8))
 
 # 图1：行为类型分布
 ax = axes[0]
-bars = ax.bar(counts.index, counts.values,
-              color=["#5B8FF9", "#F6BD16", "#5AD8A6", "#E8684A"])
+bars = ax.bar(counts.index, counts.values, color=["#5B8FF9", "#F6BD16", "#5AD8A6", "#E8684A"])
 ax.bar_label(bars)
 ax.set_title("用户行为类型分布", fontsize=13)
 ax.set_ylabel("次数")
 
-# 图2：转化漏斗（浏览 -> 加购+收藏 -> 购买）
+# 图2：转化漏斗（浏览 → 加购+收藏 → 购买）
 ax = axes[1]
 stages = ["浏览", "收藏+加购", "购买"]
 values = [pv, fav + cart, buy]
@@ -42,13 +52,13 @@ user_behavior = df.groupby(["user_id", "behavior_name"]).size().unstack(fill_val
 order = [c for c in ["浏览", "收藏", "加购", "购买"] if c in user_behavior.columns]
 bottom = pd.Series(0, index=user_behavior.index, dtype=float)
 for c in order:
-    ax.bar(user_behavior.index.astype(str), user_behavior[c],
-           bottom=bottom, label=c, width=0.6)
+    ax.bar(user_behavior.index.astype(str), user_behavior[c], bottom=bottom, label=c, width=0.6)
     bottom += user_behavior[c]
 ax.legend(title="行为", fontsize=9)
 ax.set_title("各用户行为构成", fontsize=13)
 ax.set_ylabel("次数")
 
 plt.tight_layout()
-plt.savefig("behavior_analysis.png", dpi=150)
-print("图表已保存：behavior_analysis.png")
+out = HERE / "behavior_analysis.png"
+plt.savefig(out, dpi=150)
+print(f"图表已保存：{out}")

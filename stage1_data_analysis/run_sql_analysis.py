@@ -1,76 +1,82 @@
 """
-run_sql_analysis.py — 执行 sql_analysis.sql 并将结果写入 UTF-8 文件
-用途：绕开终端编码问题，把查询结果落成可读文本
+run_sql_analysis.py — 执行 sql_analysis.sql 中的全部指标查询
+
+设计要点：SQL 只有一份（sql_analysis.sql），本脚本负责读取并逐条执行，
+          避免"脚本里抄一份 SQL、文件里再放一份"的双份维护问题。
+输出：stage1_data_analysis/sql_results.txt（UTF-8 结果快照，可直接提交到仓库）
+
+运行：py -3.10 stage1_data_analysis/run_sql_analysis.py
+前置：MySQL 已启动，且已执行过 load_to_mysql.py
 """
+from pathlib import Path
+
 import pymysql
 
-conn = pymysql.connect(host="127.0.0.1", user="root", password="", database="ecommerce_analysis")
-cur = conn.cursor()
+HERE = Path(__file__).resolve().parent
+SQL_FILE = HERE / "sql_analysis.sql"
+OUT_FILE = HERE / "sql_results.txt"
+DB_NAME = "ecommerce_analysis"
 
-sections = [
-    ("1. 整体核心指标（PV/UV/转化率）", """
-        SELECT COUNT(*) total_records, COUNT(DISTINCT user_id) uv,
-               SUM(behavior_type='pv') pv, SUM(behavior_type='fav') fav,
-               SUM(behavior_type='cart') cart, SUM(behavior_type='buy') buy,
-               ROUND(SUM(behavior_type='cart')/SUM(behavior_type='pv'),4) cart_rate,
-               ROUND(SUM(behavior_type='buy')/SUM(behavior_type='pv'),4) buy_rate
-        FROM user_behavior"""),
-    ("2. 小时级流量分布", """
-        SELECT HOUR(datetime) h, SUM(behavior_type='pv') pv,
-               COUNT(DISTINCT user_id) uv, SUM(behavior_type='buy') buy
-        FROM user_behavior GROUP BY h ORDER BY h"""),
-    ("3. 转化漏斗（独立用户口径）", """
-        SELECT COUNT(DISTINCT CASE WHEN behavior_type='pv' THEN user_id END) pv_users,
-               COUNT(DISTINCT CASE WHEN behavior_type IN ('cart','fav') THEN user_id END) intent_users,
-               COUNT(DISTINCT CASE WHEN behavior_type='buy' THEN user_id END) buy_users
-        FROM user_behavior"""),
-    ("4. 品类热度 TOP10", """
-        SELECT category_id, SUM(behavior_type='pv') pv, SUM(behavior_type='buy') buy,
-               ROUND(SUM(behavior_type='buy')/SUM(behavior_type='pv'),4) buy_rate
-        FROM user_behavior GROUP BY category_id HAVING pv > 100
-        ORDER BY pv DESC LIMIT 10"""),
-    ("5. RFM 用户分层", """
-        WITH rfm AS (
-            SELECT user_id,
-                TIMESTAMPDIFF(HOUR, MAX(CASE WHEN behavior_type='buy' THEN datetime END),
-                    (SELECT MAX(datetime) FROM user_behavior)) AS r_hours,
-                SUM(behavior_type='buy') AS f_cnt,
-                COUNT(DISTINCT CASE WHEN behavior_type='buy' THEN item_id END) AS m_items
-            FROM user_behavior GROUP BY user_id HAVING f_cnt > 0),
-        scored AS (
-            SELECT user_id, r_hours, f_cnt, m_items,
-                CASE WHEN r_hours<=1 THEN 5 WHEN r_hours<=3 THEN 4 WHEN r_hours<=6 THEN 3 WHEN r_hours<=9 THEN 2 ELSE 1 END AS r_score,
-                CASE WHEN f_cnt>=5 THEN 5 WHEN f_cnt>=3 THEN 4 WHEN f_cnt=2 THEN 3 ELSE 2 END AS f_score,
-                CASE WHEN m_items>=5 THEN 5 WHEN m_items>=3 THEN 4 WHEN m_items=2 THEN 3 ELSE 2 END AS m_score
-            FROM rfm)
-        SELECT CASE
-            WHEN r_score>=3 AND f_score>=3 AND m_score>=3 THEN '重要价值客户'
-            WHEN r_score>=3 AND f_score<3  AND m_score>=3 THEN '重要发展客户'
-            WHEN r_score<3  AND f_score>=3 AND m_score>=3 THEN '重要保持客户'
-            WHEN r_score<3  AND f_score<3  AND m_score>=3 THEN '重要挽留客户'
-            WHEN r_score>=3 AND f_score>=3 AND m_score<3  THEN '一般价值客户'
-            WHEN r_score>=3 AND f_score<3  AND m_score<3  THEN '一般发展客户'
-            WHEN r_score<3  AND f_score>=3 AND m_score<3  THEN '一般保持客户'
-            ELSE '一般挽留客户' END AS customer_layer,
-            COUNT(*) user_cnt,
-            ROUND(COUNT(*)*100.0/SUM(COUNT(*)) OVER (),1) pct
-        FROM scored GROUP BY customer_layer ORDER BY user_cnt DESC"""),
-]
+# ---------- 1. 解析 SQL 文件：按 ';' 切分语句，并用语句上方的标题注释命名该段 ----------
+# 标题优先级：优先取 "---------- 3. xxx ----------" 这种带序号的段落标记，
+# 没有标记时退化为语句上方的第一条普通注释（避免误取段落内的说明文字）
+import re
 
+MARKER = re.compile(r"^-{3,}\s*(\d+\.\s*.+?)\s*-{3,}$")
+statements, cur_lines, title, first_comment = [], [], None, None
+for line in SQL_FILE.read_text(encoding="utf-8").splitlines():
+    s = line.strip()
+    if s.startswith("--"):
+        if not cur_lines:                       # 语句还没开始 → 这条注释属于它
+            body = s.lstrip("-").strip()        # 先去掉注释符 "--"，再判断内容
+            m = MARKER.match(body)
+            if m:
+                title = m.group(1)
+            elif body and not body.startswith("=") and first_comment is None:
+                first_comment = body
+        continue
+    if not s:
+        continue
+    cur_lines.append(line)
+    if s.endswith(";"):
+        sql = "\n".join(cur_lines).rstrip().rstrip(";")
+        if not sql.upper().startswith("USE "):  # USE 语句由脚本自己连库代替
+            statements.append((title or first_comment or f"查询 {len(statements) + 1}", sql))
+        cur_lines, title, first_comment = [], None, None
+
+if not statements:
+    raise SystemExit(f"未从 {SQL_FILE} 解析出任何查询语句")
+
+# ---------- 2. 逐条执行 ----------
+try:
+    conn = pymysql.connect(host="127.0.0.1", port=3306, user="root", password="",
+                           database=DB_NAME, charset="utf8mb4")
+except Exception as e:
+    raise SystemExit(f"连接 MySQL 失败：{e}\n请先启动数据库（scripts/start_mysql.ps1）并执行 load_to_mysql.py")
+
+cursor = conn.cursor()
 lines = []
-for title, sql in sections:
-    cur.execute(sql)
-    rows = cur.fetchall()
-    cols = [d[0] for d in cur.description]
-    lines.append("=" * 60)
-    lines.append(title)
-    lines.append("-" * 60)
+for idx, (t, sql) in enumerate(statements, 1):
+    cursor.execute(sql)
+    rows = cursor.fetchall()
+    cols = [d[0] for d in cursor.description]
+    lines.append("=" * 64)
+    lines.append(t)
+    lines.append("-" * 64)
     lines.append(" | ".join(cols))
     for r in rows:
-        lines.append(" | ".join(str(v) for v in r))
+        lines.append(" | ".join("" if v is None else str(v) for v in r))
     lines.append("")
-
+    print(f"[{idx}/{len(statements)}] {t} → {len(rows)} 行")
 conn.close()
-with open("sql_results.txt", "w", encoding="utf-8") as f:
-    f.write("\n".join(lines))
-print("done -> sql_results.txt")
+
+OUT_FILE.write_text("\n".join(lines), encoding="utf-8")
+print(f"\n结果已写入：{OUT_FILE}")
+print("""
+========== 分析解读（拿到结果后重点看三处） ==========
+1. 第1段整体指标：购买率 2.57% 是真实电商的量级——简历上写"转化率"必须有分母口径。
+2. 第3段漏斗（独立用户口径）：21.6万 浏览用户 → 3.5万 有意向 → 1.06万 购买，
+   注意它与"行为次数口径"算出的比率不同，面试常被追问两者区别。
+3. 第6段 RFM：一般发展客户占比最高（75% 量级），说明这批样本中"近期活跃但购买力弱"
+   的用户是主体，运营动作应该是"提客单"而不是"拉新"。
+""")

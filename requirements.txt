@@ -1,0 +1,13 @@
+# 电商大数据学习项目 — Python 依赖
+# 建议 Python 3.10（Windows 下用 py -3.10 调用）
+#
+# 安装（国内镜像，本机实测阿里云可用）：
+#   py -3.10 -m pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+#
+# 括号内为验证通过的版本
+
+pandas>=2.0          # 2.3.3
+numpy>=1.24          # 2.2.6
+matplotlib>=3.7      # 3.10.9  绘图（中文需系统有微软雅黑）
+pymysql>=1.1         # 1.1.2   连接 MySQL（阶段1 周2 数据入库与 SQL 分析）
+duckdb>=1.0          # 1.5.5   嵌入式 OLAP，本地跑通离线数仓四层（无需 Hive 集群）
