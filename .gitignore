@@ -4,8 +4,10 @@
 # ---------- temp / debug files ----------
 *.log
 *.tmp
-_probe*
-_inv*
+# 排查/验证过程中产生的临时文件（形如 _probe.py、_dash_out.txt）
+_*
+!__init__.py
+!__pycache__/
 
 # ---------- python ----------
 __pycache__/

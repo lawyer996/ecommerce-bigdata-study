@@ -1,4 +1,4 @@
-# start_mysql.ps1 — 启动本地学习用 MySQL 8.4
+﻿# start_mysql.ps1 — 启动本地学习用 MySQL 8.4
 # 用法：右键"使用 PowerShell 运行"，或终端执行 .\start_mysql.ps1
 # 数据目录：C:\Users\28929\mysql84-data（root 空密码，仅本机 3306）
 

@@ -105,6 +105,7 @@ ecommerce-bigdata-study/
 │   ├── sql_analysis.sql           ← 6 组核心指标 SQL
 │   ├── run_sql_analysis.py        ← 执行 SQL 并落盘结果
 │   ├── sql_results.txt            ← 指标结果快照
+│   ├── dashboard.py               ← Streamlit 交互式数据大屏（6 模块 + 筛选联动）
 │   ├── sample_demo/               ← 入门小样本演示（3 个脚本）
 │   └── real_behavior_analysis.png ← 真实数据 KPI 图表
 ├── stage2_offline_dw/             ← 阶段2：离线数仓
@@ -179,6 +180,20 @@ py -3.10 run_pipeline.py
 
 所有脚本都**不依赖运行目录**（内部按脚本位置解析路径），在任何目录下执行都可以。
 
+### 3. 交互式数据大屏（阶段1·周3）
+
+```powershell
+py -3.10 -m streamlit run stage1_data_analysis/dashboard.py
+# 浏览器打开 http://localhost:8501
+```
+
+- **双数据源**：优先读 MySQL 的 `user_behavior` 表；连不上自动回退 `dataset/clean_behavior.csv`
+  —— 没装 MySQL 也能直接看
+- **侧边栏联动筛选**：时段范围 / 行为类型 / 类目 TOP N，指标卡与全部图表实时联动
+- **六个模块**：指标卡 · 小时流量趋势 · 行为分布 · 转化漏斗 · 类目热度 · RFM 八分层
+  （另含小时×行为堆积柱、明细预览与结果导出 CSV）
+- 指标口径与 `sql_analysis.sql` **逐行一致**（用官方 `AppTest` 框架做了 UI 与交互验证，0 异常）
+
 ---
 
 ## 各阶段成果
@@ -199,6 +214,18 @@ py -3.10 run_pipeline.py
 | RFM 分层 | 一般发展客户 75.7%、一般挽留 19.4%、重要价值 4.1% |
 
 图表：`real_behavior_analysis.png`（时段 PV/UV 趋势 + 真实漏斗）
+
+交互式大屏：`dashboard.py`（Streamlit，6 模块联动筛选，支持 MySQL / CSV 双数据源）
+
+| 大屏模块 | 展示内容 |
+|---|---|
+| 指标卡 | PV / UV / 加购 / 购买 + 转化率（带"当前筛选 vs 全量"对比） |
+| ① 小时流量趋势 | PV、UV 双线，看流量节奏 |
+| ② 行为分布 | 浏览/收藏/加购/购买占比（环形图） |
+| ③ 转化漏斗 | 独立用户口径，标注每层留存率（16.08% → 4.91%） |
+| ④ 小时×行为构成 | 堆积柱，看不同时段的行为结构差异 |
+| ⑤ 类目热度 TOP N | 以 PV 排序，颜色深浅表示购买率 |
+| ⑥ RFM 八分层 | 重要客户红 / 一般客户蓝，直接看出运营重心 |
 
 ### Stage2 · 离线数仓（[详细说明](stage2_offline_dw/README.md)）
 
@@ -259,6 +286,13 @@ DuckDB 的 `to_timestamp()` 返回 `TIMESTAMP WITH TIME ZONE`，会按会话时�
 豆瓣镜像已废弃、清华镜像被本机代理 403、注册 MySQL 服务需要管理员权限——
 这些都在 [docs/notes](docs/notes/) 里有记录，实际工作中同类问题占比不低。
 
+**6. 同一个指标，两处实现要对齐"取整"这类细节**
+大屏第一版 RFM 分层与 SQL 结果对不上（一般发展客户 6820 vs 8010）。原因是 SQL 的
+`TIMESTAMPDIFF(HOUR, ...)` 会**整点截断**，而 pandas 用小数小时，边界用户（6.5 小时）
+掉进了更低的分档。统一取整后六层逐行一致。
+启示：指标口径不只是"公式一样"，还包含取整、时区、NULL 处理等实现细节，
+两处实现必须显式对齐并做交叉校验，否则两边都"对"，数字却不一样。
+
 ---
 
 ## 学习进度与路线
@@ -268,7 +302,7 @@ DuckDB 的 `to_timestamp()` 返回 `TIMESTAMP WITH TIME ZONE`，会按会话时�
 | 周0 | 环境搭建 + 真实数据接入 | ✅ 完成 |
 | 周1 | 数据清洗 + 质量报告 | ✅ 完成 |
 | 周2 | MySQL 入库 + 核心指标 SQL（PV/UV/漏斗/RFM） | ✅ 完成 |
-| 周3 | Streamlit 交互大屏 + stage1 README | ⏳ 下一步 |
+| 周3 | Streamlit 交互大屏 + stage1 README | ✅ 完成（打 tag v0.1） |
 | 周4-6 | 离线数仓建模文档 + 虚拟机集群实操（Hive/Sqoop/Azkaban） | 🔶 SQL 与本地跑通已完成 |
 | 周7-9 | Kafka + Spark Structured Streaming + ECharts 大屏 | 🔶 窗口逻辑与 Flink SQL 已有 |
 | 周10-12 | 特征工程 + ALS + 完整评估 + 简历包装 | 🔶 CF 原型与评估已完成 |
@@ -292,6 +326,11 @@ DuckDB 的 `to_timestamp()` 返回 `TIMESTAMP WITH TIME ZONE`，会按会话时�
 
 **Q：为什么 `clean_behavior.csv` 没有提交到仓库？**
 它是清洗脚本的产物（28MB），一条命令即可复现，已在 `.gitignore` 中排除。
+
+**Q：大屏启动后打不开 / 端口被占用？**
+换端口：`py -3.10 -m streamlit run stage1_data_analysis/dashboard.py --server.port 8502`。
+若侧边栏显示"CSV 回退"，说明 MySQL 没启动（`.\scripts\start_mysql.ps1`），
+不影响大屏使用——数据会自动从 `dataset/clean_behavior.csv` 读取。
 
 ---
 
